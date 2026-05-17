@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تتبع الأوردر - صيدليات دكتور وائل حافظ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Cairo', 'sans-serif'] }, colors: { primary: '#1e40af', secondary: '#3b82f6', accent: '#f59e0b' } } } }
+    </script>
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #f0fdf4; } /* لون خلفية مريح (أخضر فاتح جداً) */
+        
+        /* تصميم شريط التقدم */
+        .step { flex: 1; text-align: center; position: relative; }
+        .step::before { content: ''; position: absolute; top: 15px; right: 50%; width: 100%; height: 4px; background-color: #e5e7eb; z-index: -1; }
+        .step:first-child::before { display: none; }
+        .step-icon { width: 34px; height: 34px; margin: 0 auto; background-color: #e5e7eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-weight: bold; border: 4px solid white; transition: all 0.3s;}
+        
+        .step.active .step-icon { background-color: #3b82f6; color: white; box-shadow: 0 0 0 4px #bfdbfe; }
+        .step.completed .step-icon { background-color: #10b981; color: white; }
+        .step.completed::before { background-color: #10b981; }
+        .step.active::before { background-color: #3b82f6; }
+        
+        .offer-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="text-gray-800 antialiased min-h-screen flex flex-col">
+
+    <header class="bg-white shadow-sm py-4 border-b-4 border-primary">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-2xl font-black text-primary"><i class="fa-solid fa-staff-snake text-accent ml-2"></i>صيدليات دكتور وائل حافظ</h1>
+            <p class="text-sm text-gray-500 font-semibold mt-1">بوابتك لتتبع طلباتك واستكشاف أحدث العروض</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 flex-grow">
+        <div class="flex flex-col lg:flex-row gap-8">
+            
+            <div class="w-full lg:w-3/5 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4"><i class="fa-solid fa-magnifying-glass-location text-secondary ml-2"></i> تتبع حالة طلبك</h2>
+                    <form onsubmit="trackOrder(event)" class="flex gap-2">
+                        <input type="text" id="searchInput" required placeholder="أدخل رقم الأوردر أو رقم الموبايل..." class="flex-grow px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-secondary outline-none font-bold text-center" dir="ltr">
+                        <button type="submit" id="trackBtn" class="bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-800 transition shadow-md w-32">تتبع</button>
+                    </form>
+                    <p id="errorMsg" class="text-red-500 text-sm font-bold mt-3 hidden text-center"></p>
+                </div>
+
+                <div id="trackingResult" class="hidden bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+                    <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
+                        <h3 class="font-black text-lg text-gray-800">طلب رقم: <span id="resOrderNum" class="text-accent"></span></h3>
+                        <span id="resDate" class="text-sm font-semibold text-gray-500 bg-gray-50 px-3 py-1 rounded-full border"></span>
+                    </div>
+
+                    <div class="flex justify-between relative z-10 mb-8" dir="rtl">
+                        <div class="step" id="step1">
+                            <div class="step-icon"><i class="fa-solid fa-box"></i></div>
+                            <div class="text-xs font-bold mt-2 text-gray-600">جاري التجهيز</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-icon"><i class="fa-solid fa-motorcycle"></i></div>
+                            <div class="text-xs font-bold mt-2 text-gray-600">خرج للتوصيل</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-icon"><i class="fa-solid fa-check"></i></div>
+                            <div class="text-xs font-bold mt-2 text-gray-600">تم التسليم</div>
+                        </div>
+                    </div>
+
+                    <div id="deliveryInfo" class="bg-blue-50 text-blue-800 p-4 rounded-xl text-sm font-bold text-center border border-blue-100">
+                        </div>
+                </div>
+
+                <div id="feedbackSection" class="hidden bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl shadow-sm p-6 border border-green-100 text-center">
+                    <h2 class="text-xl font-black text-green-800 mb-2">كيف كانت تجربتك معنا؟ 🌟</h2>
+                    <p class="text-sm text-green-600 font-semibold mb-6">رأيك يهمنا جداً لتطوير خدمتنا بشكل مستمر.</p>
+                    
+                    <div class="flex justify-center gap-2 mb-6" id="starContainer" dir="ltr">
+                        <i class="fa-solid fa-star text-3xl text-gray-300 cursor-pointer transition hover:scale-110" data-val="1" onclick="setRating(1)"></i>
+                        <i class="fa-solid fa-star text-3xl text-gray-300 cursor-pointer transition hover:scale-110" data-val="2" onclick="setRating(2)"></i>
+                        <i class="fa-solid fa-star text-3xl text-gray-300 cursor-pointer transition hover:scale-110" data-val="3" onclick="setRating(3)"></i>
+                        <i class="fa-solid fa-star text-3xl text-gray-300 cursor-pointer transition hover:scale-110" data-val="4" onclick="setRating(4)"></i>
+                        <i class="fa-solid fa-star text-3xl text-gray-300 cursor-pointer transition hover:scale-110" data-val="5" onclick="setRating(5)"></i>
+                    </div>
+
+                    <textarea id="feedbackComment" rows="3" placeholder="اكتب تعليقك أو شكواك هنا (اختياري)..." class="w-full px-4 py-3 border border-green-200 rounded-xl outline-none focus:border-green-500 mb-4 shadow-inner"></textarea>
+                    
+                    <button id="submitFeedbackBtn" onclick="submitFeedback()" class="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition shadow-md text-lg">إرسال التقييم</button>
+                    <div id="feedbackSuccess" class="hidden text-green-700 font-black mt-4"><i class="fa-solid fa-heart text-red-500 animate-bounce"></i> شكراً لك! تم استلام تقييمك بنجاح.</div>
+                </div>
+            </div>
+
+            <div class="w-full lg:w-2/5">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
+                    <div class="bg-gradient-to-r from-accent to-orange-400 p-4 text-white text-center shadow-inner">
+                        <h2 class="text-xl font-black"><i class="fa-solid fa-fire-flame-curved ml-2"></i>أحدث عروضنا لك</h2>
+                    </div>
+                    <div id="offersContainer" class="p-6 space-y-5 overflow-y-auto flex-grow bg-gray-50">
+                        <div class="text-center text-gray-400 font-bold py-10"><i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i><br>جاري تحميل العروض...</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-gray-400 text-center py-4 text-xs font-semibold mt-auto">
+        جميع الحقوق محفوظة &copy; صيدليات دكتور وائل حافظ 2024
+    </footer>
+
+    <script>
+        const DB_URL = 'https://story-64520-default-rtdb.firebaseio.com/';
+        let currentOrder = null;
+        let selectedRating = 0;
+
+        // عند تحميل الصفحة، التحقق إذا كان هناك رقم هاتف في الرابط (قادم من الواتساب)
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const phone = urlParams.get('phone');
+            if(phone) {
+                document.getElementById('searchInput').value = phone;
+                document.getElementById('trackBtn').click();
+            }
+            loadOffers();
+        });
+
+        // ---------------------------------
+        // 1. منطق التتبع (البحث في آخر 7 أيام)
+        // ---------------------------------
+        async function trackOrder(e) {
+            e.preventDefault();
+            const searchKey = document.getElementById('searchInput').value.trim();
+            const errorMsg = document.getElementById('errorMsg');
+            const btn = document.getElementById('trackBtn');
+            const resDiv = document.getElementById('trackingResult');
+            const feedbackDiv = document.getElementById('feedbackSection');
+            
+            errorMsg.classList.add('hidden');
+            resDiv.classList.add('hidden');
+            feedbackDiv.classList.add('hidden');
+            
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true;
+            currentOrder = null; selectedRating = 0; resetStars();
+
+            // تجهيز تواريخ آخر 7 أيام للبحث فيها
+            const datesToSearch = [];
+            for(let i=0; i<7; i++) {
+                let d = new Date(); d.setDate(d.getDate() - i);
+                datesToSearch.push(d.toISOString().split('T')[0]);
+            }
+
+            try {
+                // البحث في الأيام
+                for (let date of datesToSearch) {
+                    const res = await fetch(`${DB_URL}records/${date}.json`);
+                    const data = await res.json();
+                    if(data) {
+                        // البحث عن تطابق برقم الأوردر أو رقم التليفون
+                        const foundKey = Object.keys(data).find(k => {
+                            const r = data[k];
+                            // تنظيف رقم هاتف العميل المسجل ورقم البحث للمقارنة
+                            const rPhone = r.customerWhatsapp ? r.customerWhatsapp.replace(/\D/g, '') : '';
+                            const sPhone = searchKey.replace(/\D/g, '');
+                            
+                            return (r.orderNumber && r.orderNumber === searchKey) || 
+                                   (rPhone && sPhone && rPhone.endsWith(sPhone.slice(-10))); // مطابقة آخر 10 أرقام
+                        });
+
+                        if (foundKey) {
+                            currentOrder = { id: foundKey, date: date, ...data[foundKey] };
+                            break; // وجدنا الأوردر، نتوقف عن البحث
+                        }
+                    }
+                }
+
+                if (currentOrder) {
+                    displayTrackingData();
+                } else {
+                    errorMsg.textContent = 'عذراً، لم نتمكن من العثور على أوردر يطابق بياناتك. تأكد من الرقم وحاول مجدداً.';
+                    errorMsg.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorMsg.textContent = 'حدث خطأ في الاتصال بالسيرفر. يرجى المحاولة لاحقاً.';
+                errorMsg.classList.remove('hidden');
+            } finally {
+                btn.innerHTML = 'تتبع'; btn.disabled = false;
+            }
+        }
+
+        function displayTrackingData() {
+            document.getElementById('trackingResult').classList.remove('hidden');
+            document.getElementById('resOrderNum').textContent = currentOrder.orderNumber;
+            document.getElementById('resDate').textContent = `${currentOrder.date} - ${currentOrder.time}`;
+
+            // معالجة الحالة (للتوافق مع البيانات القديمة pending = preparing)
+            const status = (currentOrder.status === 'pending') ? 'preparing' : currentOrder.status;
+
+            // تحديث شريط التقدم
+            const s1 = document.getElementById('step1');
+            const s2 = document.getElementById('step2');
+            const s3 = document.getElementById('step3');
+            const info = document.getElementById('deliveryInfo');
+
+            s1.className = 'step'; s2.className = 'step'; s3.className = 'step';
+
+            if (status === 'preparing') {
+                s1.classList.add('active');
+                info.innerHTML = `جاري تجهيز طلبك في الفرع الآن <i class="fa-solid fa-box-open ml-1"></i>`;
+            } 
+            else if (status === 'out_for_delivery') {
+                s1.classList.add('completed'); s2.classList.add('active');
+                info.innerHTML = `مندوبنا البطل <strong>${currentOrder.delegateName}</strong> في طريقه إليك الآن 🛵💨<br><span class="text-xs text-blue-600 mt-1 block">يرجى تجهيز المبلغ المطلوب: ${currentOrder.orderValue || 'حسب الفاتورة'} ج.م</span>`;
+            } 
+            else if (status === 'delivered') {
+                s1.classList.add('completed'); s2.classList.add('completed'); s3.classList.add('completed');
+                info.innerHTML = `تم تسليم الطلب بنجاح! شكراً لاختيارك صيدلياتنا 💙`;
+                
+                // إظهار قسم التقييم
+                document.getElementById('feedbackSection').classList.remove('hidden');
+                document.getElementById('submitFeedbackBtn').classList.remove('hidden');
+                document.getElementById('feedbackSuccess').classList.add('hidden');
+                document.getElementById('feedbackComment').value = '';
+            }
+        }
+
+        // ---------------------------------
+        // 2. منطق التقييم (Feedback)
+        // ---------------------------------
+        function setRating(val) {
+            selectedRating = val;
+            const stars = document.getElementById('starContainer').children;
+            for(let i=0; i<stars.length; i++) {
+                if(i < val) {
+                    stars[i].classList.remove('text-gray-300', 'fa-regular');
+                    stars[i].classList.add('text-yellow-400', 'fa-solid');
+                } else {
+                    stars[i].classList.remove('text-yellow-400', 'fa-solid');
+                    stars[i].classList.add('text-gray-300', 'fa-regular');
+                }
+            }
+        }
+
+        function resetStars() {
+            const stars = document.getElementById('starContainer').children;
+            for(let i=0; i<stars.length; i++) {
+                stars[i].classList.remove('text-yellow-400', 'fa-solid');
+                stars[i].classList.add('text-gray-300', 'fa-solid');
+            }
+        }
+
+        async function submitFeedback() {
+            if (selectedRating === 0) return alert("يرجى اختيار عدد النجوم أولاً لتقييمنا.");
+            
+            const comment = document.getElementById('feedbackComment').value.trim();
+            const btn = document.getElementById('submitFeedbackBtn');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الإرسال...';
+            btn.disabled = true;
+
+            const feedbackData = {
+                orderId: currentOrder.id,
+                orderNumber: currentOrder.orderNumber,
+                orderDate: currentOrder.date,
+                rating: selectedRating,
+                comment: comment,
+                timestamp: Date.now()
+            };
+
+            try {
+                // حفظ التقييم باستخدام ID الأوردر لمنع التكرار لنفس الأوردر
+                await fetch(`${DB_URL}feedback/${currentOrder.id}.json`, {
+                    method: 'PUT',
+                    body: JSON.stringify(feedbackData)
+                });
+                
+                btn.classList.add('hidden');
+                document.getElementById('feedbackSuccess').classList.remove('hidden');
+            } catch(e) {
+                alert("حدث خطأ في الإرسال. يرجى المحاولة مرة أخرى.");
+                btn.innerHTML = 'إرسال التقييم'; btn.disabled = false;
+            }
+        }
+
+        // ---------------------------------
+        // 3. منطق العروض (Offers)
+        // ---------------------------------
+        async function loadOffers() {
+            const container = document.getElementById('offersContainer');
+            try {
+                const res = await fetch(`${DB_URL}offers.json`);
+                const data = await res.json();
+                container.innerHTML = '';
+
+                if (!data) return container.innerHTML = '<div class="text-center text-gray-400 font-bold py-10">لا توجد عروض حالية. تابعنا قريباً!</div>';
+
+                const now = new Date();
+                now.setHours(0,0,0,0); // تصفير الوقت للمقارنة بالأيام فقط
+                let hasActiveOffers = false;
+
+                // الترتيب من الأحدث
+                const sortedKeys = Object.keys(data).sort((a,b) => data[b].timestamp - data[a].timestamp);
+
+                sortedKeys.forEach(k => {
+                    const o = data[k];
+                    const sDate = new Date(o.startDate); sDate.setHours(0,0,0,0);
+                    const eDate = new Date(o.endDate); eDate.setHours(23,59,59,999);
+
+                    // عرض العروض النشطة فقط (تاريخ اليوم بين البداية والنهاية)
+                    if (now >= sDate && now <= eDate) {
+                        hasActiveOffers = true;
+                        
+                        // تنظيف رقم الواتساب للرابط
+                        let phoneStr = o.whatsapp.replace(/\D/g, '');
+                        if (phoneStr.startsWith('01')) phoneStr = '2' + phoneStr;
+                        const msgText = encodeURIComponent(`أهلاً، أريد الاستفسار عن عرض: ${o.title}`);
+                        const waLink = `https://wa.me/${phoneStr}?text=${msgText}`;
+
+                        container.innerHTML += `
+                            <a href="${waLink}" target="_blank" class="offer-card block bg-white rounded-xl shadow-sm border border-orange-100 overflow-hidden transition-all duration-300 relative group">
+                                <span class="absolute top-2 right-2 bg-red-600 text-white text-xs font-black px-2 py-1 rounded shadow-md z-10 animate-pulse">عرض لفترة محدودة!</span>
+                                <div class="h-40 bg-gray-200 relative overflow-hidden">
+                                    <img src="${o.mediaUrl}" alt="${o.title}" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" onerror="this.src='https://placehold.co/600x400/f3f4f6/a1a1aa?text=صورة+العرض'">
+                                </div>
+                                <div class="p-4">
+                                    <h3 class="font-black text-lg text-gray-800 mb-1">${o.title}</h3>
+                                    <p class="text-sm text-gray-600 font-semibold mb-3 line-clamp-2">${o.details}</p>
+                                    <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-2">
+                                        <span class="text-xs text-red-500 font-bold"><i class="fa-regular fa-clock"></i> ينتهي في: ${o.endDate}</span>
+                                        <span class="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1"><i class="fa-brands fa-whatsapp text-lg"></i> اطلب الآن</span>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                    }
+                });
+
+                if (!hasActiveOffers) {
+                    container.innerHTML = '<div class="text-center text-gray-400 font-bold py-10"><i class="fa-solid fa-box-open text-4xl mb-3 block opacity-50"></i>لا توجد عروض متاحة في الوقت الحالي.<br>انتظروا مفاجآتنا قريباً!</div>';
+                }
+
+            } catch (err) {
+                container.innerHTML = '<div class="text-center text-red-400 font-bold py-10">حدث خطأ في تحميل العروض.</div>';
+            }
+        }
+    </script>
+</body>
+</html>
