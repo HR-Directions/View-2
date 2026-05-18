@@ -167,15 +167,25 @@
         let currentOrder = null;
         let selectedRating = 0;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const phone = urlParams.get('phone');
-            if(phone) {
-                document.getElementById('searchInput').value = phone;
-                document.getElementById('trackBtn').click();
-            }
-            loadOffers();
-        });
+        // ✅ الكود الجديد لقراءة رقم الأوردر تلقائياً وملء خانة البحث
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    const orderNum = urlParams.get('order'); // قراءة رقم الأوردر الجديد
+    const phone = urlParams.get('phone');    // قراءة رقم الهاتف (كخيار احتياطي القديم)
+
+    if (orderNum) {
+        // إذا وجد رقم الأوردر في الرابط، يتم ملء الخانة والبحث به فوراً
+        document.getElementById('searchInput').value = orderNum;
+        document.getElementById('trackBtn').click();
+    } else if (phone) {
+        // إذا كان الرابط قديم ويحتوي على الهاتف، يملأه ويبحث به
+        document.getElementById('searchInput').value = phone;
+        document.getElementById('trackBtn').click();
+    }
+    
+    loadOffers();
+});
 
         function openLightbox(imgSrc) {
             const lightbox = document.getElementById('imageLightbox');
