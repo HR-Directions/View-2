@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>لوحة التحكم العالمية - صيدليات د. وائل حافظ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- مكتبة إكسيل العالمية SheetJS -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <script>
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Cairo', 'sans-serif'] }, colors: { brand: '#1e3a8a', adminBg: '#f8fafc' } } } }
+    </script>
+    <style> 
+        body { font-family: 'Cairo', sans-serif; background-color: #f8fafc; } 
+        /* نظام التوستس */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; width: 90%; max-width: 400px; }
+        .toast { background: white; color: #1e293b; padding: 14px 20px; border-radius: 12px; font-weight: 700; font-size: 13px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); border-right: 4px solid #10b981; animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; display: flex; align-items: center; gap: 10px; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* القائمة الجانبية للموبايل */
+        @media (max-width: 768px) {
+            aside { position: fixed; top: 0; right: -100%; height: 100vh; transition: right 0.3s ease; }
+            aside.open { right: 0; }
+            #overlay { display: none; }
+            #overlay.open { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10; }
+        }
+        
+        .custom-blur { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .logo-img { content: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRd02k3Q6kJ5SP7oTsyCA-j7jUiadX4SfBqfzeJaRkor3sOJ6oD0OOnUxNV&s=10'); }
+        
+        /* شريط التمرير مخصص للبحث */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-slate-800 flex h-screen overflow-hidden">
+
+    <div id="overlay" onclick="toggleSidebar()"></div>
+
+    <!-- القائمة الجانبية -->
+    <aside id="sidebar" class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
+        <div class="p-6 border-b border-slate-800 flex flex-col items-center text-center mt-2 relative">
+            <button class="md:hidden absolute top-4 left-4 text-slate-400 text-xl" onclick="toggleSidebar()"><i class="fa-solid fa-xmark"></i></button>
+            <img src="#" alt="Logo" class="logo-img w-16 h-16 rounded-xl border border-slate-700 shadow-lg mb-3 object-cover bg-white">
+            <h1 class="font-black text-lg tracking-wide text-white">صيدليات د. وائل</h1>
+            <span class="bg-brand text-white text-[9px] px-2.5 py-0.5 rounded-full mt-2 font-bold tracking-widest">ENTERPRISE v5.0</span>
+        </div>
+        <nav class="flex-grow p-4 space-y-2 mt-2 overflow-y-auto">
+            <button onclick="switchTab('dashboard')" id="btn-dashboard" class="w-full flex items-center gap-3 text-right p-3 rounded-xl font-bold bg-brand text-white transition"><i class="fa-solid fa-chart-pie w-5 text-center"></i> لوحة الإحصائيات</button>
+            <button onclick="switchTab('orders')" id="btn-orders" class="w-full flex items-center gap-3 text-right p-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition relative"><i class="fa-solid fa-basket-shopping w-5 text-center"></i> إدارة الطلبات <span id="ordersBadge" class="absolute left-3 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center hidden">0</span></button>
+            <button onclick="switchTab('products')" id="btn-products" class="w-full flex items-center gap-3 text-right p-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition"><i class="fa-solid fa-pills w-5 text-center"></i> إدارة المنتجات و Excel</button>
+            <button onclick="switchTab('stories')" id="btn-stories" class="w-full flex items-center gap-3 text-right p-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition"><i class="fa-solid fa-circle-play w-5 text-center"></i> الحالات الفورية (Stories)</button>
+            <button onclick="switchTab('customers')" id="btn-customers" class="w-full flex items-center gap-3 text-right p-3 rounded-xl font-bold text-slate-400 hover:bg-slate-800 transition"><i class="fa-solid fa-users w-5 text-center"></i> قاعدة العملاء</button>
+        </nav>
+    </aside>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="flex-grow flex flex-col h-screen overflow-y-auto relative bg-slate-50/50 w-full">
+        <header class="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <button class="md:hidden text-slate-600 text-xl w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+                <h2 id="pageTitle" class="text-base md:text-xl font-black text-slate-800 flex items-center gap-2 truncate"><i class="fa-solid fa-chart-pie text-brand"></i> لوحة الإحصائيات</h2>
+            </div>
+            <button onclick="window.location.reload()" class="bg-blue-50 text-brand border border-blue-100 px-3 py-2 rounded-xl font-bold text-xs hover:bg-brand hover:text-white transition shrink-0"><i class="fa-solid fa-rotate-right md:mr-1"></i> <span class="hidden md:inline">تحديث</span></button>
+        </header>
+
+        <div class="p-4 md:p-6 pb-20">
+            
+            <!-- 0. الإحصائيات -->
+            <section id="sec-dashboard" class="block">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-full bg-blue-50 text-brand flex items-center justify-center text-xl mb-2"><i class="fa-solid fa-box-open"></i></div>
+                        <p class="text-[11px] text-slate-400 font-bold">الطلبات</p><h3 class="text-xl font-black text-slate-800" id="statOrders">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-2"><i class="fa-solid fa-pills"></i></div>
+                        <p class="text-[11px] text-slate-400 font-bold">المنتجات</p><h3 class="text-xl font-black text-slate-800" id="statProducts">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xl mb-2"><i class="fa-solid fa-users"></i></div>
+                        <p class="text-[11px] text-slate-400 font-bold">العملاء</p><h3 class="text-xl font-black text-slate-800" id="statCustomers">0</h3>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center">
+                        <div class="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xl mb-2"><i class="fa-solid fa-money-bill-wave"></i></div>
+                        <p class="text-[11px] text-slate-400 font-bold">إجمالي الإيرادات</p><h3 class="text-lg font-black text-amber-600 truncate w-full" id="statRevenue">0 ج</h3>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 1. الطلبات -->
+            <section id="sec-orders" class="hidden">
+                <input type="text" id="searchOrdersInput" oninput="filterOrders()" placeholder="بحث بالاسم أو الهاتف..." class="w-full p-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-brand mb-5 shadow-sm">
+                <div id="ordersList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+            </section>
+
+            <!-- 2. المنتجات (مع Pagination والبحث بالكود) -->
+            <section id="sec-products" class="hidden">
+                
+                <!-- أزرار الإكسيل -->
+                <div class="flex flex-wrap gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <div class="w-full md:w-auto text-sm font-black text-slate-700 flex items-center gap-2 mb-2 md:mb-0"><i class="fa-solid fa-file-excel text-emerald-600 text-lg"></i> إدارة البيانات عبر إكسيل (Excel):</div>
+                    <div class="flex-grow flex gap-2">
+                        <button onclick="exportToExcel()" class="flex-1 bg-emerald-50 text-emerald-700 border border-emerald-200 py-2.5 rounded-xl font-bold text-xs hover:bg-emerald-600 hover:text-white transition flex items-center justify-center gap-2 shadow-sm"><i class="fa-solid fa-download"></i> تصدير للإكسيل</button>
+                        
+                        <label class="flex-1 bg-blue-50 text-brand border border-blue-200 py-2.5 rounded-xl font-bold text-xs hover:bg-brand hover:text-white transition flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+                            <i class="fa-solid fa-upload"></i> استيراد / تحديث
+                            <input type="file" id="excelFile" accept=".xlsx, .xls" class="hidden" onchange="importFromExcel(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- فورم الإضافة اليدوية -->
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 mb-6">
+                    <h3 class="font-black text-sm mb-4 text-brand border-b pb-2">إضافة منتج يدوياً</h3>
+                    <form id="productForm" onsubmit="addProduct(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="pName" required placeholder="اسم المنتج" class="border p-3.5 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand">
+                        <input type="number" id="pPrice" required placeholder="السعر (ج.م)" class="border p-3.5 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand">
+                        <input type="url" id="pImg" required placeholder="رابط الصورة" class="border p-3.5 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand md:col-span-2" dir="ltr">
+                        
+                        <div class="flex items-center justify-between border p-3.5 rounded-xl bg-slate-50">
+                            <label class="font-bold text-slate-700 text-xs">تفعيل الخصم؟</label>
+                            <input type="checkbox" id="pHasDiscount" class="w-5 h-5 accent-brand" onchange="document.getElementById('pDiscount').disabled = !this.checked">
+                        </div>
+                        <input type="number" id="pDiscount" disabled placeholder="نسبة الخصم (%)" class="border p-3.5 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand disabled:opacity-50">
+                        
+                        <!-- المنتج المميز -->
+                        <div class="flex items-center justify-between border p-3.5 rounded-xl bg-amber-50 border-amber-100 md:col-span-2">
+                            <label class="font-bold text-amber-700 text-xs flex items-center gap-2"><i class="fa-solid fa-star"></i> تمييز كمنتج الأفضل مبيعاً (يظهر في شريط الواجهة)</label>
+                            <input type="checkbox" id="pIsFeatured" class="w-5 h-5 accent-amber-500">
+                        </div>
+
+                        <textarea id="pDetails" placeholder="التفاصيل..." class="border p-3.5 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand md:col-span-2" rows="2"></textarea>
+                        
+                        <button type="submit" class="bg-brand text-white font-black p-4 rounded-xl md:col-span-2 hover:bg-blue-900 transition flex items-center justify-center gap-2 text-sm shadow-md"><i class="fa-solid fa-plus"></i> إضافة المنتج</button>
+                    </form>
+                </div>
+
+                <!-- شريط البحث -->
+                <input type="text" id="searchProductsInput" oninput="filterProducts()" placeholder="ابحث باسم المنتج أو بكود المنتج (الـ ID) للوصول الفوري..." class="w-full p-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-brand mb-4 shadow-sm">
+
+                <!-- جدول المنتجات المضافة -->
+                <div class="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100">
+                    <table class="w-full text-right text-xs md:text-sm">
+                        <thead class="bg-slate-50 border-b text-slate-500 font-bold">
+                            <tr>
+                                <th class="p-4">كود الصنف (ID)</th>
+                                <th class="p-4">الصورة</th>
+                                <th class="p-4">المنتج</th>
+                                <th class="p-4">السعر</th>
+                                <th class="p-4 text-center">الإجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsTableBody" class="font-semibold text-slate-700"></tbody>
+                    </table>
+                </div>
+
+                <!-- أزرار التصفح (Pagination) لـ 20 صنف فقط -->
+                <div class="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mt-4">
+                    <button onclick="prevPage()" id="prevPageBtn" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-700 disabled:opacity-50 transition"><i class="fa-solid fa-arrow-right ml-1"></i> السابق</button>
+                    <span class="font-bold text-xs text-slate-600 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100">صفحة <span id="currentPageSpan" class="text-brand text-sm font-black">1</span> من <span id="totalPagesSpan" class="font-black">1</span></span>
+                    <button onclick="nextPage()" id="nextPageBtn" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-700 disabled:opacity-50 transition">التالي <i class="fa-solid fa-arrow-left mr-1"></i></button>
+                </div>
+            </section>
+
+            <!-- 3. الحالات (Stories) -->
+            <section id="sec-stories" class="hidden">
+                 <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 mb-6">
+                    <h3 class="font-black text-sm mb-4 text-amber-600 border-b pb-2">نشر حالة (Story) جديدة</h3>
+                    <form id="storyForm" onsubmit="addStory(event)" class="flex flex-col gap-4">
+                        
+                        <!-- نظام تحديد الصنف للحالات عبر نافذة البحث المنبثقة -->
+                        <div class="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
+                            <input type="hidden" id="sSelectedProductId" required>
+                            <input type="text" id="sSelectedProductName" readonly placeholder="اضغط على زر (بحث واختيار) لتحديد الصنف المستهدف..." class="flex-grow border p-4 rounded-xl bg-slate-50 font-bold text-sm outline-none cursor-not-allowed text-slate-600">
+                            <button type="button" onclick="openStoryProductSearch()" class="bg-blue-50 text-brand border border-blue-200 font-black px-6 py-4 rounded-xl hover:bg-brand hover:text-white transition shrink-0 shadow-sm text-sm"><i class="fa-solid fa-magnifying-glass"></i> بحث واختيار الصنف</button>
+                        </div>
+                        
+                        <input type="url" id="sImg" placeholder="رابط صورة مخصصة للحالة (اختياري - سيتم استخدام صورة المنتج تلقائياً إن ترك فارغاً)" class="border p-4 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" dir="ltr">
+                        <button type="submit" class="bg-amber-500 text-white font-black p-4 rounded-xl hover:bg-amber-600 transition text-sm shadow-md flex justify-center items-center gap-2"><i class="fa-solid fa-upload"></i> نشر الحالة الآن</button>
+                    </form>
+                </div>
+                <div id="storiesList" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+            </section>
+
+            <!-- 4. العملاء -->
+            <section id="sec-customers" class="hidden">
+                <input type="text" id="searchCustomersInput" oninput="filterCustomersUI()" placeholder="بحث بالاسم أو الهاتف..." class="w-full p-4 bg-white border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:border-brand mb-4 shadow-sm">
+                <div class="overflow-x-auto bg-white rounded-2xl shadow-sm border border-slate-100 p-1">
+                    <table class="w-full text-right text-xs md:text-sm">
+                        <thead class="bg-slate-50 text-slate-500 font-bold border-b">
+                            <tr><th class="p-4">الاسم</th><th class="p-4">الهاتف</th><th class="p-4">العنوان</th><th class="p-4 text-center">الإجراء</th></tr>
+                        </thead>
+                        <tbody id="customersTableBody" class="font-semibold text-slate-700"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ================== النوافذ المنبثقة الاحترافية (Modals) ================== -->
+
+    <!-- 1. مودال تعديل المنتج -->
+    <div id="editProductModal" class="fixed inset-0 bg-slate-900/80 custom-blur z-50 hidden flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[95vh]">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="font-black text-sm"><i class="fa-solid fa-edit text-brand ml-1"></i> تعديل المنتج</h3>
+                <button onclick="closeModal('editProductModal')" class="text-slate-400 hover:text-red-500 bg-white w-8 h-8 rounded-full shadow flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto space-y-4 flex-grow custom-scrollbar">
+                <input type="hidden" id="editProdId">
+                <input type="text" id="editProdName" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" placeholder="الاسم">
+                <input type="number" id="editProdPrice" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" placeholder="السعر">
+                <input type="url" id="editProdImg" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" dir="ltr" placeholder="URL">
+                
+                <div class="flex items-center justify-between border p-3 rounded-xl bg-slate-50">
+                    <label class="font-bold text-xs">خصم؟</label>
+                    <input type="checkbox" id="editProdHasDiscount" class="w-5 h-5 accent-brand" onchange="document.getElementById('editProdDiscount').disabled = !this.checked">
+                </div>
+                <input type="number" id="editProdDiscount" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm disabled:opacity-50 outline-none focus:border-brand" placeholder="نسبة الخصم %">
+                
+                <div class="flex items-center justify-between border p-3 rounded-xl bg-amber-50 border-amber-100">
+                    <label class="font-bold text-amber-700 text-xs">منتج مميز (الأفضل)؟</label>
+                    <input type="checkbox" id="editProdIsFeatured" class="w-5 h-5 accent-amber-500">
+                </div>
+
+                <textarea id="editProdDetails" rows="2" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" placeholder="التفاصيل"></textarea>
+            </div>
+            <div class="p-4 border-t flex gap-3 bg-slate-50 shrink-0">
+                <button onclick="saveProductEdits()" class="flex-grow bg-brand text-white font-black py-3 rounded-xl text-sm hover:bg-blue-900 transition">حفظ التعديلات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. مودال البحث واختيار منتج للحالة (Story) -->
+    <div id="storyProductSearchModal" class="fixed inset-0 bg-slate-900/80 custom-blur z-50 hidden flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col h-[80vh]">
+            <div class="p-4 border-b flex justify-between items-center bg-brand text-white shrink-0">
+                <h3 class="font-black text-sm"><i class="fa-solid fa-search ml-1"></i> ابحث عن الصنف بكود الـ ID أو الاسم</h3>
+                <button onclick="closeModal('storyProductSearchModal')" class="text-white/70 hover:text-white bg-black/20 w-8 h-8 rounded-full flex items-center justify-center transition"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-4 border-b bg-slate-50 shrink-0">
+                <input type="text" id="sSearchInput" oninput="filterStoryProducts()" placeholder="اكتب كود المنتج (ID) أو اسمه للبحث السريع..." class="w-full border p-3.5 rounded-xl bg-white font-bold text-sm outline-none focus:border-brand shadow-sm">
+            </div>
+            <div class="p-2 overflow-y-auto flex-grow custom-scrollbar bg-slate-50" id="sProductSearchResults">
+                <!-- نتائج البحث تظهر هنا -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. مودال تعديل الحالة (Story) -->
+    <div id="editStoryModal" class="fixed inset-0 bg-slate-900/80 custom-blur z-50 hidden flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="font-black text-sm"><i class="fa-solid fa-edit text-brand ml-1"></i> تعديل الحالة</h3>
+                <button onclick="closeModal('editStoryModal')" class="text-slate-400 hover:text-red-500 bg-white w-8 h-8 rounded-full shadow flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="editStoryId">
+                
+                <label class="block text-xs font-bold text-slate-500">المنتج المرتبط حالياً</label>
+                <div class="flex gap-2 items-center">
+                    <input type="hidden" id="editStoryProductId">
+                    <input type="text" id="editStoryProductName" class="flex-grow border p-3 rounded-xl bg-slate-100 font-bold text-sm cursor-not-allowed" readonly>
+                    <button type="button" onclick="openEditStoryProductSearch()" class="bg-blue-50 text-brand border border-blue-200 font-black px-3 py-3 rounded-xl hover:bg-brand hover:text-white transition shrink-0 text-xs"><i class="fa-solid fa-magnifying-glass"></i> تغيير الصنف</button>
+                </div>
+
+                <label class="block text-xs font-bold text-slate-500 mt-3">رابط الصورة المخصصة للحالة</label>
+                <input type="url" id="editStoryImg" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" dir="ltr" placeholder="URL الصورة المخصصة (اختياري)">
+            </div>
+            <div class="p-4 border-t bg-slate-50 shrink-0">
+                <button onclick="saveStoryEdits()" class="w-full bg-amber-500 text-white font-black py-3 rounded-xl text-sm hover:bg-amber-600 transition">حفظ التعديلات</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. مودال تعديل بيانات العميل -->
+    <div id="editCustomerModal" class="fixed inset-0 bg-slate-900/80 custom-blur z-50 hidden flex justify-center items-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-slate-50 shrink-0">
+                <h3 class="font-black text-sm"><i class="fa-solid fa-user-pen text-brand ml-1"></i> تعديل بيانات العميل</h3>
+                <button onclick="closeModal('editCustomerModal')" class="text-slate-400 hover:text-red-500 bg-white w-8 h-8 rounded-full shadow flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-4">
+                <input type="hidden" id="editCustomerId">
+                <input type="text" id="editCustomerName" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" placeholder="الاسم">
+                <input type="text" id="editCustomerPhone" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" dir="ltr" placeholder="رقم الهاتف">
+                <textarea id="editCustomerAddress" rows="2" class="w-full border p-3 rounded-xl bg-slate-50 font-bold text-sm outline-none focus:border-brand" placeholder="العنوان"></textarea>
+            </div>
+            <div class="p-4 border-t bg-slate-50 shrink-0">
+                <button onclick="saveCustomerEdits()" class="w-full bg-brand text-white font-black py-3 rounded-xl text-sm hover:bg-blue-900 transition">حفظ بيانات العميل</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script>
+        // رابط قاعدة البيانات الخاص بك المباشر
+        const DB_URL = 'https://story-64520-default-rtdb.firebaseio.com/'; 
+
+        let products = {}; let orders = {}; let stories = {}; let customers = {};
+        
+        // متغيرات التصفح والصفحات للمنتجات (20 منتج لكل صفحة)
+        let currentProductsList = [];
+        let currentPage = 1;
+        const itemsPerPage = 20;
+        let storySearchContext = 'add'; 
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('overlay').classList.toggle('open');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            
+            let icon = '';
+            let borderColor = 'border-right: 4px solid #10b981;';
+            if (type === 'success') { icon = '<i class="fa-solid fa-check text-emerald-500"></i>'; borderColor = 'border-right: 4px solid #10b981;'; } 
+            else if (type === 'error') { icon = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>'; borderColor = 'border-right: 4px solid #ef4444;'; } 
+            else if (type === 'info') { icon = '<i class="fa-solid fa-circle-info text-blue-500"></i>'; borderColor = 'border-right: 4px solid #3b82f6;'; }
+            
+            toast.setAttribute('style', borderColor);
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+            document.getElementById(modalId).classList.remove('flex');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { 
+            loadData('dashboard'); 
+        });
+
+        function switchTab(tab) {
+            ['dashboard', 'orders', 'products', 'stories', 'customers'].forEach(t => {
+                document.getElementById(`sec-${t}`).classList.add('hidden');
+                document.getElementById(`btn-${t}`).classList.replace('bg-brand', 'hover:bg-slate-800');
+                document.getElementById(`btn-${t}`).classList.remove('text-white', 'shadow-lg');
+                document.getElementById(`btn-${t}`).classList.add('text-slate-400');
+            });
+            
+            document.getElementById(`sec-${tab}`).classList.remove('hidden');
+            document.getElementById(`btn-${tab}`).classList.replace('hover:bg-slate-800', 'bg-brand');
+            document.getElementById(`btn-${tab}`).classList.remove('text-slate-400');
+            document.getElementById(`btn-${tab}`).classList.add('text-white', 'shadow-lg');
+            
+            const titles = { dashboard: 'الإحصائيات', orders: 'الطلبات الواردة', products: 'المنتجات (Excel)', stories: 'الحالات', customers: 'العملاء' };
+            const icons = { dashboard: 'chart-pie', orders: 'basket-shopping', products: 'pills', stories: 'circle-play', customers: 'users' };
+            document.getElementById('pageTitle').innerHTML = `<i class="fa-solid fa-${icons[tab]} text-brand"></i> ${titles[tab]}`;
+
+            if(window.innerWidth <= 768) toggleSidebar();
+            if(tab === 'products') document.getElementById('searchProductsInput').value = '';
+            
+            loadData(tab);
+        }
+
+        async function loadData(tab) {
+            try {
+                const [oRes, pRes, sRes, cRes] = await Promise.all([ 
+                    fetch(`${DB_URL}cart_orders.json`), fetch(`${DB_URL}products.json`), fetch(`${DB_URL}stories.json`), fetch(`${DB_URL}customers.json`) 
+                ]);
+                
+                const rawO = await oRes.json(); const rawP = await pRes.json(); const rawS = await sRes.json(); const rawC = await cRes.json();
+
+                orders = rawO || {};
+                products = rawP || {};
+                stories = rawS || {};
+                customers = rawC || {};
+                
+                updateDashboardStats();
+                if(tab === 'orders') renderOrders();
+                else if(tab === 'products') { filterProducts(); } 
+                else if(tab === 'stories') renderStories();
+                else if(tab === 'customers') renderCustomers();
+            } catch(e) { 
+                console.error("Error loading data:", e); 
+                showToast('خطأ في الاتصال بقاعدة البيانات.', 'error');
+            }
+        }
+
+        function updateDashboardStats() {
+            // تم حل المشكلة هنا: حذفنا محاولة التعديل على (statStories) لأنه غير موجود في التصميم
+            let rev = 0; let pending = 0;
+            Object.values(orders).forEach(o => { if(o.status === 'delivered') rev += (o.total||0); if(o.status === 'pending') pending++; });
+            
+            document.getElementById('statOrders').textContent = Object.keys(orders).length;
+            document.getElementById('statProducts').textContent = Object.keys(products).length;
+            document.getElementById('statCustomers').textContent = Object.keys(customers).length;
+            document.getElementById('statRevenue').textContent = `${rev} ج`;
+            
+            const b = document.getElementById('ordersBadge');
+            if(pending > 0) { b.textContent = pending; b.classList.remove('hidden'); } else b.classList.add('hidden');
+        }
+
+        // ================== قسم الطلبات ==================
+        function renderOrders() {
+            const c = document.getElementById('ordersList'); c.innerHTML = '';
+            Object.keys(orders).reverse().forEach(key => {
+                const o = orders[key];
+                const bg = { pending: 'bg-red-50 text-red-600 border-red-200', preparing: 'bg-amber-50 text-amber-600 border-amber-200', out_for_delivery: 'bg-blue-50 text-brand border-blue-200', delivered: 'bg-emerald-50 text-emerald-600 border-emerald-200' }[o.status];
+                const txt = { pending: 'مراجعة', preparing: 'تجهيز', out_for_delivery: 'توصيل', delivered: 'تم' }[o.status];
+                
+                c.innerHTML += `
+                    <div class="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col order-card hover:shadow-md transition" data-search="${o.customer?.name || ''} ${o.customer?.phone || ''}">
+                        <div class="flex justify-between items-start mb-2">
+                            <h4 class="font-black text-sm text-brand truncate"><i class="fa-solid fa-user-circle mr-1"></i> ${o.customer?.name || 'بدون اسم'}</h4>
+                            <span class="text-[10px] font-black px-2 py-0.5 rounded border ${bg}">${txt}</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-500 mb-2" dir="ltr"><i class="fa-solid fa-phone text-[10px]"></i> ${o.customer?.phone || '-'}</p>
+                        <div class="mb-3 bg-slate-50 p-2 rounded-xl text-xs flex-grow border border-slate-100">${o.items ? o.items.map(i=>`<div class="mb-1 border-b border-slate-100 pb-1 last:border-0 last:pb-0 last:mb-0"><span class="text-brand font-black mx-1">x${i.qty}</span> ${i.name}</div>`).join('') : 'لا توجد منتجات'}</div>
+                        <div class="flex justify-between items-center font-black mb-3 text-sm bg-slate-50 p-2 rounded-xl border border-slate-100"><span>الإجمالي:</span><span class="text-brand">${o.total || 0} ج</span></div>
+                        <select onchange="updateOrderStatus('${key}', this.value)" class="w-full bg-white border border-slate-200 text-xs font-bold p-2.5 rounded-xl outline-none focus:border-brand mb-2 cursor-pointer shadow-sm">
+                            <option value="pending" ${o.status==='pending'?'selected':''}>قيد المراجعة</option>
+                            <option value="preparing" ${o.status==='preparing'?'selected':''}>تجهيز</option>
+                            <option value="out_for_delivery" ${o.status==='out_for_delivery'?'selected':''}>خرج للتوصيل</option>
+                            <option value="delivered" ${o.status==='delivered'?'selected':''}>تم التسليم</option>
+                        </select>
+                        <button onclick="deleteData('cart_orders', '${key}')" class="text-red-500 text-xs font-bold hover:bg-red-600 hover:text-white transition w-full p-2.5 bg-red-50 border border-red-100 rounded-xl flex justify-center items-center gap-1"><i class="fa-solid fa-trash-can"></i> حذف نهائي للطلب</button>
+                    </div>`;
+            });
+        }
+
+        async function updateOrderStatus(id, val) { 
+            await fetch(`${DB_URL}cart_orders/${id}.json`, { method: 'PATCH', body: JSON.stringify({status: val}) }); 
+            showToast('تم تحديث حالة الطلب'); 
+            loadData('orders'); 
+        }
+
+        // ================== قسم المنتجات (Pagination + Search by name/code) ==================
+        function filterProducts() {
+            const q = document.getElementById('searchProductsInput').value.toLowerCase().trim();
+            
+            currentProductsList = Object.keys(products).map(k => ({ id: k, ...products[k] })).filter(p => {
+                const matchName = (p.name || '').toLowerCase().includes(q);
+                const matchId = (p.id || '').toLowerCase().includes(q);
+                return matchName || matchId;
+            });
+            
+            currentProductsList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            
+            currentPage = 1; 
+            renderProducts();
+        }
+
+        function renderProducts() {
+            const tb = document.getElementById('productsTableBody'); 
+            tb.innerHTML = '';
+            
+            const totalPages = Math.ceil(currentProductsList.length / itemsPerPage) || 1;
+            
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+            
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const paginatedItems = currentProductsList.slice(start, end);
+
+            if(paginatedItems.length === 0) {
+                tb.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 font-bold text-xs">لا توجد منتجات مطابقة للبحث أو مضافة</td></tr>`;
+            } else {
+                paginatedItems.forEach(p => {
+                    tb.innerHTML += `
+                        <tr class="border-b border-slate-50 hover:bg-slate-50/80 transition">
+                            <td class="p-3 font-mono text-[10px] text-slate-500 select-all font-bold" dir="ltr">${p.id}</td>
+                            <td class="p-3"><img src="${p.imageUrl}" class="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-sm" onerror="this.src='https://placehold.co/50'"></td>
+                            <td class="p-3">
+                                <div class="font-bold text-xs text-slate-800">${p.name || ''}</div>
+                                ${p.isFeatured ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-black mt-1 inline-block"><i class="fa-solid fa-star"></i> مميز</span>' : ''}
+                            </td>
+                            <td class="p-3 font-black text-brand text-xs">${p.price || 0} ج</td>
+                            <td class="p-3 text-center">
+                                <div class="flex justify-center gap-1.5 items-center">
+                                    <button onclick="openEditProductModal('${p.id}')" class="bg-blue-50 hover:bg-brand hover:text-white text-brand w-8 h-8 rounded-lg shadow-sm transition flex justify-center items-center"><i class="fa-solid fa-edit text-xs"></i></button>
+                                    <button onclick="deleteData('products', '${p.id}')" class="bg-red-50 hover:bg-red-600 hover:text-white text-red-500 w-8 h-8 rounded-lg shadow-sm transition flex justify-center items-center"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </td>
+                        </tr>`;
+                });
+            }
+
+            document.getElementById('currentPageSpan').innerText = currentPage;
+            document.getElementById('totalPagesSpan').innerText = totalPages;
+            
+            document.getElementById('prevPageBtn').disabled = currentPage === 1;
+            document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
+        }
+
+        function prevPage() {
+            if (currentPage > 1) { currentPage--; renderProducts(); }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(currentProductsList.length / itemsPerPage);
+            if (currentPage < totalPages) { currentPage++; renderProducts(); }
+        }
+
+        async function addProduct(e) {
+            e.preventDefault();
+            const data = { 
+                name: document.getElementById('pName').value, 
+                price: parseFloat(document.getElementById('pPrice').value), 
+                imageUrl: document.getElementById('pImg').value, 
+                details: document.getElementById('pDetails').value, 
+                hasDiscount: document.getElementById('pHasDiscount').checked, 
+                discountPercent: document.getElementById('pHasDiscount').checked ? parseFloat(document.getElementById('pDiscount').value) : 0, 
+                isFeatured: document.getElementById('pIsFeatured').checked, 
+                timestamp: Date.now() 
+            };
+            await fetch(`${DB_URL}products.json`, { method: 'POST', body: JSON.stringify(data) });
+            e.target.reset(); document.getElementById('pDiscount').disabled = true; showToast('تمت إضافة المنتج بنجاح'); loadData('products');
+        }
+
+        function openEditProductModal(id) {
+            const p = products[id];
+            document.getElementById('editProdId').value = id; 
+            document.getElementById('editProdName').value = p.name || ''; 
+            document.getElementById('editProdPrice').value = p.price || 0; 
+            document.getElementById('editProdImg').value = p.imageUrl || '';
+            document.getElementById('editProdHasDiscount').checked = p.hasDiscount||false; 
+            document.getElementById('editProdDiscount').disabled = !(p.hasDiscount||false); 
+            document.getElementById('editProdDiscount').value = p.discountPercent||0;
+            document.getElementById('editProdIsFeatured').checked = p.isFeatured||false; 
+            document.getElementById('editProdDetails').value = p.details||'';
+            
+            document.getElementById('editProductModal').classList.remove('hidden'); 
+            document.getElementById('editProductModal').classList.add('flex');
+        }
+        
+        async function saveProductEdits() {
+            const id = document.getElementById('editProdId').value; 
+            const hd = document.getElementById('editProdHasDiscount').checked;
+            const data = { 
+                name: document.getElementById('editProdName').value, 
+                price: parseFloat(document.getElementById('editProdPrice').value), 
+                imageUrl: document.getElementById('editProdImg').value, 
+                hasDiscount: hd, 
+                discountPercent: hd ? parseFloat(document.getElementById('editProdDiscount').value) : 0, 
+                isFeatured: document.getElementById('editProdIsFeatured').checked, 
+                details: document.getElementById('editProdDetails').value 
+            };
+            await fetch(`${DB_URL}products/${id}.json`, { method: 'PATCH', body: JSON.stringify(data) });
+            closeModal('editProductModal'); showToast('تم تعديل المنتج بنجاح'); loadData('products');
+        }
+
+        // ================== قسم الحالات (Stories) ==================
+        function renderStories() {
+            const c = document.getElementById('storiesList'); c.innerHTML = '';
+            Object.keys(stories).reverse().forEach(k => {
+                const s = stories[k]; 
+                const pName = products[s.productId] ? products[s.productId].name : 'منتج محذوف/غير متوفر';
+                const img = s.imageUrl || (products[s.productId] ? products[s.productId].imageUrl : 'https://placehold.co/150');
+                
+                c.innerHTML += `
+                    <div class="bg-white rounded-2xl overflow-hidden shadow-sm relative group border border-slate-100">
+                        <img src="${img}" class="w-full h-40 object-cover" onerror="this.src='https://placehold.co/150'">
+                        <div class="absolute bottom-2 left-1 right-1 text-center text-[10px] font-bold text-white bg-black/75 backdrop-blur-sm rounded-lg px-2 py-1.5 truncate">${pName}</div>
+                        <div class="absolute top-2 right-2 flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="openEditStoryModal('${k}')" class="bg-blue-500 hover:bg-blue-600 text-white w-7 h-7 rounded-full shadow-md flex justify-center items-center transition"><i class="fa-solid fa-pen text-[10px]"></i></button>
+                            <button onclick="deleteData('stories', '${k}')" class="bg-red-500 hover:bg-red-600 text-white w-7 h-7 rounded-full shadow-md flex justify-center items-center transition"><i class="fa-solid fa-trash text-[10px]"></i></button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function openStoryProductSearch() {
+            storySearchContext = 'add';
+            document.getElementById('sSearchInput').value = '';
+            filterStoryProducts();
+            document.getElementById('storyProductSearchModal').classList.remove('hidden');
+            document.getElementById('storyProductSearchModal').classList.add('flex');
+            setTimeout(() => document.getElementById('sSearchInput').focus(), 150);
+        }
+
+        function openEditStoryProductSearch() {
+            storySearchContext = 'edit';
+            document.getElementById('sSearchInput').value = '';
+            filterStoryProducts();
+            document.getElementById('storyProductSearchModal').classList.remove('hidden');
+            document.getElementById('storyProductSearchModal').classList.add('flex');
+            setTimeout(() => document.getElementById('sSearchInput').focus(), 150);
+        }
+
+        function filterStoryProducts() {
+            const q = document.getElementById('sSearchInput').value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('sProductSearchResults');
+            resultsContainer.innerHTML = '';
+            
+            const matchedProducts = Object.keys(products).map(k => ({ id: k, ...products[k] })).filter(p => {
+                return (p.name || '').toLowerCase().includes(q) || (p.id || '').toLowerCase().includes(q);
+            });
+
+            if (matchedProducts.length === 0) {
+                resultsContainer.innerHTML = '<div class="text-center text-slate-500 font-bold p-4 text-xs">لا يوجد صنف مطابق</div>';
+                return;
+            }
+
+            matchedProducts.forEach(p => {
+                const escapedName = (p.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                resultsContainer.innerHTML += `
+                    <div onclick="selectProductForStory('${p.id}', '${escapedName}')" class="flex items-center gap-3 p-3 border-b border-slate-100 hover:bg-blue-50 cursor-pointer transition rounded-xl mb-1 bg-white shadow-sm border">
+                        <img src="${p.imageUrl}" class="w-10 h-10 rounded-lg object-cover border border-slate-200" onerror="this.src='https://placehold.co/50'">
+                        <div class="flex-grow overflow-hidden">
+                            <div class="font-bold text-xs text-slate-800 truncate">${p.name || ''}</div>
+                            <div class="font-mono text-[9px] text-slate-400 mt-1 truncate" dir="ltr">كود: ${p.id}</div>
+                        </div>
+                        <div class="font-black text-brand text-xs whitespace-nowrap">${p.price || 0} ج</div>
+                    </div>
+                `;
+            });
+        }
+
+        function selectProductForStory(id, name) {
+            if (storySearchContext === 'add') {
+                document.getElementById('sSelectedProductId').value = id;
+                document.getElementById('sSelectedProductName').value = name;
+                closeModal('storyProductSearchModal');
+                showToast('تم تحديد الصنف بنجاح للحالة.');
+            } else if (storySearchContext === 'edit') {
+                document.getElementById('editStoryProductId').value = id;
+                document.getElementById('editStoryProductName').value = name;
+                closeModal('storyProductSearchModal');
+                showToast('تم تعديل الصنف المرتبط.');
+            }
+        }
+
+        async function addStory(e) {
+            e.preventDefault();
+            const pId = document.getElementById('sSelectedProductId').value;
+            if(!pId) { showToast('يجب اختيار صنف أولاً للحالة!', 'error'); return; }
+
+            const customImg = document.getElementById('sImg').value.trim();
+            const finalImg = customImg || (products[pId] ? products[pId].imageUrl : '');
+
+            await fetch(`${DB_URL}stories.json`, { method: 'POST', body: JSON.stringify({ productId: pId, imageUrl: finalImg, timestamp: Date.now() }) });
+            e.target.reset(); 
+            document.getElementById('sSelectedProductId').value = ''; document.getElementById('sSelectedProductName').value = '';
+            showToast('تم نشر الحالة بنجاح!'); loadData('stories');
+        }
+
+        function openEditStoryModal(id) {
+            const s = stories[id];
+            const pName = products[s.productId] ? products[s.productId].name : 'منتج غير متوفر';
+            document.getElementById('editStoryId').value = id;
+            document.getElementById('editStoryProductId').value = s.productId || '';
+            document.getElementById('editStoryProductName').value = pName;
+            document.getElementById('editStoryImg').value = s.imageUrl || '';
+            document.getElementById('editStoryModal').classList.remove('hidden'); 
+            document.getElementById('editStoryModal').classList.add('flex');
+        }
+
+        async function saveStoryEdits() {
+            const id = document.getElementById('editStoryId').value;
+            const pId = document.getElementById('editStoryProductId').value;
+            const img = document.getElementById('editStoryImg').value.trim();
+            
+            if(!pId) { showToast('يجب ربط الحالة بمنتج صالح', 'error'); return; }
+            const finalImg = img || (products[pId] ? products[pId].imageUrl : '');
+
+            await fetch(`${DB_URL}stories/${id}.json`, { method: 'PATCH', body: JSON.stringify({ productId: pId, imageUrl: finalImg }) });
+            closeModal('editStoryModal'); showToast('تم تعديل الحالة بنجاح!'); loadData('stories');
+        }
+
+        // ================== قسم العملاء ==================
+        function filterCustomersUI() {
+            const q = document.getElementById('searchCustomersInput').value.toLowerCase().trim();
+            document.querySelectorAll('.customer-row').forEach(c => {
+                c.style.display = c.dataset.search.toLowerCase().includes(q) ? 'table-row' : 'none';
+            });
+        }
+
+        function renderCustomers() {
+            const tb = document.getElementById('customersTableBody'); tb.innerHTML = '';
+            Object.keys(customers).reverse().forEach(k => {
+                const c = customers[k];
+                tb.innerHTML += `
+                    <tr class="border-b border-slate-50 customer-row hover:bg-slate-50 transition" data-search="${c.name || ''} ${c.phone || ''}">
+                        <td class="p-4 font-bold text-xs text-brand"><i class="fa-solid fa-user text-slate-300 ml-1"></i> ${c.name || 'مجهول'}</td>
+                        <td class="p-4 font-bold text-xs" dir="ltr">${c.phone || '-'}</td>
+                        <td class="p-4 text-[11px] text-slate-500 max-w-[150px] truncate">${c.address || '-'}</td>
+                        <td class="p-4 text-center">
+                            <div class="flex justify-center gap-1.5 items-center">
+                                <button onclick="openEditCustomerModal('${k}')" class="bg-blue-50 hover:bg-blue-100 text-brand w-8 h-8 rounded-lg shadow-sm transition flex justify-center items-center"><i class="fa-solid fa-pen text-xs"></i></button>
+                                <button onclick="deleteData('customers', '${k}')" class="bg-red-50 hover:bg-red-100 text-red-500 w-8 h-8 rounded-lg shadow-sm transition flex justify-center items-center"><i class="fa-solid fa-trash text-xs"></i></button>
+                            </div>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function openEditCustomerModal(id) {
+            const c = customers[id];
+            document.getElementById('editCustomerId').value = id;
+            document.getElementById('editCustomerName').value = c.name || '';
+            document.getElementById('editCustomerPhone').value = c.phone || '';
+            document.getElementById('editCustomerAddress').value = c.address || '';
+            document.getElementById('editCustomerModal').classList.remove('hidden'); document.getElementById('editCustomerModal').classList.add('flex');
+        }
+
+        async function saveCustomerEdits() {
+            const id = document.getElementById('editCustomerId').value;
+            const data = { name: document.getElementById('editCustomerName').value, phone: document.getElementById('editCustomerPhone').value, address: document.getElementById('editCustomerAddress').value };
+            await fetch(`${DB_URL}customers/${id}.json`, { method: 'PATCH', body: JSON.stringify(data) });
+            closeModal('editCustomerModal'); showToast('تم تحديث بيانات العميل'); loadData('customers');
+        }
+
+        // ================== دالة الحذف العامة ==================
+        async function deleteData(path, key) { 
+            if(confirm('تأكيد الحذف النهائي؟')) { 
+                await fetch(`${DB_URL}${path}/${key}.json`, { method: 'DELETE' }); 
+                showToast('تم الحذف بنجاح'); loadData(path === 'cart_orders' ? 'orders' : path); 
+            } 
+        }
+
+        // ================== نظام الإكسيل ==================
+        function exportToExcel() {
+            if(Object.keys(products).length === 0) return showToast('لا توجد منتجات', 'error');
+            const dataToExport = Object.keys(products).map(key => {
+                const p = products[key];
+                return { "معرف النظام (ID) - لا تقم بتعديله": key, "اسم المنتج": p.name || "", "السعر (ج.م)": p.price || 0, "رابط الصورة (URL)": p.imageUrl || "", "المنتج مميز (الأفضل)؟": p.isFeatured ? "نعم" : "لا", "يوجد خصم؟": p.hasDiscount ? "نعم" : "لا", "نسبة الخصم (%)": p.discountPercent || 0, "التفاصيل": p.details || "" };
+            });
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            worksheet['!cols'] = [ {wch: 25}, {wch: 35}, {wch: 15}, {wch: 40}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 50} ];
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "المنتجات");
+            XLSX.writeFile(workbook, `منتجات_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast('تم التصدير بنجاح!');
+        }
+
+        async function importFromExcel(event) {
+            const file = event.target.files[0]; if(!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    showToast('جاري المزامنة...', 'info');
+                    const data = new Uint8Array(e.target.result); const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]]; const jsonProducts = XLSX.utils.sheet_to_json(worksheet);
+                    let updatedCount = 0; let addedCount = 0;
+
+                    for(let row of jsonProducts) {
+                        const id = row["معرف النظام (ID) - لا تقم بتعديله"]; const name = row["اسم المنتج"]; const price = parseFloat(row["السعر (ج.م)"]);
+                        if(!name || isNaN(price)) continue;
+                        const productData = { name: name, price: price, imageUrl: row["رابط الصورة (URL)"] || "https://placehold.co/300", isFeatured: row["المنتج مميز (الأفضل)؟"] === "نعم", hasDiscount: row["يوجد خصم؟"] === "نعم", discountPercent: parseFloat(row["نسبة الخصم (%)"]) || 0, details: row["التفاصيل"] || "", timestamp: Date.now() };
+
+                        if(id && products[id]) { await fetch(`${DB_URL}products/${id}.json`, { method: 'PATCH', body: JSON.stringify(productData) }); updatedCount++; } 
+                        else { await fetch(`${DB_URL}products.json`, { method: 'POST', body: JSON.stringify(productData) }); addedCount++; }
+                    }
+                    showToast(`تمت المزامنة: تحديث ${updatedCount} وإضافة ${addedCount}`); loadData('products');
+                } catch(error) { showToast('خطأ في الملف', 'error'); }
+            };
+            reader.readAsArrayBuffer(file); event.target.value = '';
+        }
+
+        function filterOrders() { const q = document.getElementById('searchOrdersInput').value.toLowerCase(); document.querySelectorAll('.order-card').forEach(c => c.style.display = c.dataset.search.toLowerCase().includes(q) ? 'flex' : 'none'); }
+    </script>
+</body>
+</html>
