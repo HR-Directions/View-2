@@ -375,7 +375,7 @@
             else btn.style.display = 'none';
 
             setTimeout(() => { if(document.getElementById(`bar-${index}`)) { document.getElementById(`bar-${index}`).style.transition = 'width 5s linear'; document.getElementById(`bar-${index}`).style.width = '100%'; } }, 50);
-            clearTimeout(storyTimer); storyTimer = setTimeout(() => nextStory(), 5000);
+            clearTimeout(storyTimer); storyTimer = setTimeout(() => nextStory(), 8000);
         }
         function nextStory() { if (currentStoryIndex < stories.length - 1) openStory(currentStoryIndex + 1); else closeStory(); }
         function closeStory() { clearTimeout(storyTimer); document.getElementById('storyViewerModal').classList.add('hidden'); document.getElementById('storyViewerModal').classList.remove('flex'); }
